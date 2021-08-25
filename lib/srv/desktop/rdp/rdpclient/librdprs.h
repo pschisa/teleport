@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define NTSTATUS_OK 0
+
 typedef enum CGOPointerButton {
   PointerButtonNone,
   PointerButtonLeft,
