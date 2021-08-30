@@ -42,8 +42,7 @@ type transportConfig struct {
 	accessPoint  auth.AccessPoint
 	cipherSuites []uint16
 	identity     *tlsca.Identity
-	server       types.Server
-	app          *types.App
+	server       types.AppServer
 	ws           types.WebSession
 	clusterName  string
 }
@@ -64,9 +63,6 @@ func (c transportConfig) Check() error {
 	}
 	if c.server == nil {
 		return trace.BadParameter("server missing")
-	}
-	if c.app == nil {
-		return trace.BadParameter("app missing")
 	}
 	if c.ws == nil {
 		return trace.BadParameter("web session missing")

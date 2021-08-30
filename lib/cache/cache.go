@@ -1358,7 +1358,19 @@ func (c *Cache) GetKubeServices(ctx context.Context) ([]types.Server, error) {
 	return rg.presence.GetKubeServices(ctx)
 }
 
+// GetApplicationServers returns all registered application servers.
+func (c *Cache) GetApplicationServers(ctx context.Context, namespace string) ([]types.AppServer, error) {
+	rg, err := c.read()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	defer rg.Release()
+	return rg.presence.GetApplicationServers(ctx, namespace)
+}
+
 // GetAppServers gets all application servers.
+//
+// DELETE IN 9.0. Deprecated, use GetApplicationServers.
 func (c *Cache) GetAppServers(ctx context.Context, namespace string, opts ...services.MarshalOption) ([]types.Server, error) {
 	rg, err := c.read()
 	if err != nil {

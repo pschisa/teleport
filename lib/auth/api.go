@@ -140,7 +140,12 @@ type ReadAccessPoint interface {
 	GetTunnelConnections(clusterName string, opts ...services.MarshalOption) ([]types.TunnelConnection, error)
 
 	// GetAppServers gets all application servers.
+	//
+	// DELETE IN 9.0. Deprecated, use GetApplicationServers.
 	GetAppServers(ctx context.Context, namespace string, opts ...services.MarshalOption) ([]types.Server, error)
+
+	// GetApplicationServers returns all registered application servers.
+	GetApplicationServers(ctx context.Context, namespace string) ([]types.AppServer, error)
 
 	// GetAppSession gets an application web session.
 	GetAppSession(context.Context, types.GetAppSessionRequest) (types.WebSession, error)
