@@ -1926,3 +1926,9 @@ func (c *Client) DeleteAllWindowsDesktops(ctx context.Context) error {
 	}
 	return nil
 }
+
+// ChangeUserAuthentication is implemented by AuthService.ChangeUserAuthentication.
+func (c *Client) ChangeUserAuthentication(ctx context.Context, req *proto.ChangeUserAuthenticationRequest) (*proto.ChangeUserAuthenticationResponse, error) {
+	res, err := c.grpc.ChangeUserAuthentication(ctx, req, c.callOpts...)
+	return res, trail.FromGRPC(err)
+}
