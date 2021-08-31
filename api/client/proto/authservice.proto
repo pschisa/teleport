@@ -100,6 +100,8 @@ message Event {
             [ (gogoproto.jsontag) = "windows_desktop,omitempty" ];
         // Database is a database resource.
         types.DatabaseV3 Database = 28 [ (gogoproto.jsontag) = "database,omitempty" ];
+        // AppServer is an application server resource.
+        types.AppServerV3 AppServer = 29 [ (gogoproto.jsontag) = "app_server,omitempty" ];
     }
 }
 
