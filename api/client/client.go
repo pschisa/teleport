@@ -1934,3 +1934,9 @@ func (c *Client) StartAccountRecovery(ctx context.Context, req *proto.StartAccou
 	res, err := c.grpc.StartAccountRecovery(ctx, req, c.callOpts...)
 	return res, trail.FromGRPC(err)
 }
+
+// ApproveAccountRecovery is implemented by AuthService.ApproveAccountRecovery
+func (c *Client) ApproveAccountRecovery(ctx context.Context, req *proto.ApproveAccountRecoveryRequest) (types.UserToken, error) {
+	res, err := c.grpc.ApproveAccountRecovery(ctx, req, c.callOpts...)
+	return res, trail.FromGRPC(err)
+}
