@@ -1940,3 +1940,9 @@ func (c *Client) ApproveAccountRecovery(ctx context.Context, req *proto.ApproveA
 	res, err := c.grpc.ApproveAccountRecovery(ctx, req, c.callOpts...)
 	return res, trail.FromGRPC(err)
 }
+
+// ChangeAuthnFromAccountRecovery is implemented by AuthService.ChangeAuthnFromAccountRecovery
+func (c *Client) ChangeAuthnFromAccountRecovery(ctx context.Context, req *proto.ChangeAuthnFromAccountRecoveryRequest) error {
+	_, err := c.grpc.ChangeAuthnFromAccountRecovery(ctx, req, c.callOpts...)
+	return trail.FromGRPC(err)
+}
