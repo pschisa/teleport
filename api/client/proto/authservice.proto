@@ -1034,16 +1034,17 @@ message StartAccountRecoveryRequest {
 message ApproveAccountRecoveryRequest {
     // RecoveryStartTokenID is the ID of a recovery start token that's required to verify this
     // request.
-    string RecoveryStartTokenID = 1;
+    string RecoveryStartTokenID = 1 [ (gogoproto.jsontag) = "recovery_start_token_id" ];
     // Username is the name of the user that the token belongs to, used to verify that this name
     // is the same as defined in token for use with emails.
-    string Username = 2;
+    string Username = 2 [ (gogoproto.jsontag) = "username" ];
     // AuthnCred is the authentication cred that needs to be verified.
     oneof AuthnCred {
         // Password is users password in plain text.
-        bytes Password = 3;
+        bytes Password = 3 [ (gogoproto.jsontag) = "password,omitempty" ];
         // MFAAuthenticateResponse is a response to a MFA challenge.
-        MFAAuthenticateResponse MFAAuthenticateResponse = 4;
+        MFAAuthenticateResponse MFAAuthenticateResponse = 4
+            [ (gogoproto.jsontag) = "mfa_authenticate_response,omitempty" ];
     }
 }
 

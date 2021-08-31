@@ -318,8 +318,6 @@ func TestApproveAccountRecoveryExtended_WithPassword(t *testing.T) {
 func TestApproveAccountRecovery_WithTOTP(t *testing.T) {
 	srv := newTestTLSServer(t)
 	ctx := context.Background()
-	mockEmitter := &events.MockEmitter{}
-	srv.Auth().emitter = mockEmitter
 
 	defaultModules := modules.GetModules()
 	defer modules.SetModules(defaultModules)
@@ -353,8 +351,6 @@ func TestApproveAccountRecovery_WithTOTP(t *testing.T) {
 func TestApproveAccountRecovery_WithU2F(t *testing.T) {
 	srv := newTestTLSServer(t)
 	ctx := context.Background()
-	mockEmitter := &events.MockEmitter{}
-	srv.Auth().emitter = mockEmitter
 
 	defaultModules := modules.GetModules()
 	defer modules.SetModules(defaultModules)
