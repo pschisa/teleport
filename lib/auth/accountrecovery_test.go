@@ -442,6 +442,149 @@ func TestApproveAccountRecovery_WithLock(t *testing.T) {
 	require.Len(t, attempts, 0)
 }
 
+func TestChangeAuthnFromAccountRecovery_ChangePwd(t *testing.T) {
+	srv := newTestTLSServer(t)
+	ctx := context.Background()
+
+	defaultModules := modules.GetModules()
+	defer modules.SetModules(defaultModules)
+	modules.SetModules(&testWithCloudModules{})
+
+	u, err := createUserWithRecoveryCodes(srv, "")
+	require.NoError(t, err)
+
+	// Login lock should not affect changing authentication.
+	triggerLoginLock(t, srv.Auth(), u.username)
+
+	// Acquire an approved token requesting to recover a password.
+	approvedToken, err := srv.Auth().createRecoveryToken(ctx, u.username, UserTokenTypeRecoveryApproved, types.UserTokenUsage_RECOVER_PWD)
+	require.NoError(t, err)
+
+	// Set new password.
+	err = srv.Auth().ChangeAuthnFromAccountRecovery(ctx, &proto.ChangeAuthnFromAccountRecoveryRequest{
+		RecoveryApprovedTokenID: approvedToken.GetName(),
+		NewAuthnCred:            &proto.ChangeAuthnFromAccountRecoveryRequest_NewPassword{NewPassword: []byte("new-password")},
+	})
+	require.NoError(t, err)
+
+	// Test locks are removed.
+	user, err := srv.Auth().GetUser(u.username, false)
+	require.NoError(t, err)
+	require.False(t, user.GetStatus().IsLocked)
+	require.True(t, user.GetStatus().RecoveryAttemptLockExpires.IsZero())
+	require.True(t, user.GetStatus().LockExpires.IsZero())
+
+	// Test login attempts are removed.
+	attempts, err := srv.Auth().GetUserLoginAttempts(u.username)
+	require.NoError(t, err)
+	require.Len(t, attempts, 0)
+}
+
+func TestChangeAuthnFromAccountRecovery_ChangeTOTP(t *testing.T) {
+	srv := newTestTLSServer(t)
+	ctx := context.Background()
+	mockEmitter := &events.MockEmitter{}
+	srv.Auth().emitter = mockEmitter
+
+	defaultModules := modules.GetModules()
+	defer modules.SetModules(defaultModules)
+	modules.SetModules(&testWithCloudModules{})
+
+	u, err := createUserWithRecoveryCodes(srv, "otp")
+	require.NoError(t, err)
+
+	// Acquire an approved token requesting to recover a second factor.
+	approvedToken, err := srv.Auth().createRecoveryToken(ctx, u.username, UserTokenTypeRecoveryApproved, types.UserTokenUsage_RECOVER_2FA)
+	require.NoError(t, err)
+
+	// Get a new totp code.
+	newOTPCode, _, err := getOTPCode(srv, approvedToken.GetName())
+	require.NoError(t, err)
+
+	// Test adding new totp device with existing device name returns error.
+	err = srv.Auth().ChangeAuthnFromAccountRecovery(ctx, &proto.ChangeAuthnFromAccountRecoveryRequest{
+		RecoveryApprovedTokenID: approvedToken.GetName(),
+		NewDeviceName:           "otp",
+		NewAuthnCred: &proto.ChangeAuthnFromAccountRecoveryRequest_NewMFAResponse{NewMFAResponse: &proto.MFARegisterResponse{
+			Response: &proto.MFARegisterResponse_TOTP{TOTP: &proto.TOTPRegisterResponse{Code: newOTPCode}},
+		}},
+	})
+	require.True(t, trace.IsAlreadyExists(err))
+
+	// Add new totp device with unique device name.
+	err = srv.Auth().ChangeAuthnFromAccountRecovery(ctx, &proto.ChangeAuthnFromAccountRecoveryRequest{
+		RecoveryApprovedTokenID: approvedToken.GetName(),
+		NewDeviceName:           "new-otp",
+		NewAuthnCred: &proto.ChangeAuthnFromAccountRecoveryRequest_NewMFAResponse{NewMFAResponse: &proto.MFARegisterResponse{
+			Response: &proto.MFARegisterResponse_TOTP{TOTP: &proto.TOTPRegisterResponse{Code: newOTPCode}},
+		}},
+	})
+	require.NoError(t, err)
+
+	// Test new device has been added.
+	mfas, err := srv.Auth().Identity.GetMFADevices(ctx, u.username, false)
+	require.NoError(t, err)
+
+	deviceNames := make([]string, 0, len(mfas))
+	for _, mfa := range mfas {
+		deviceNames = append(deviceNames, mfa.GetName())
+	}
+	require.ElementsMatch(t, []string{"otp" /* default name */, "new-otp"}, deviceNames)
+
+	// Test events emitted.
+	event := mockEmitter.LastEvent()
+	require.Equal(t, event.GetType(), events.MFADeviceAddEvent)
+	require.Equal(t, event.GetCode(), events.MFADeviceAddEventCode)
+	require.Equal(t, event.(*apievents.MFADeviceAdd).UserMetadata.User, u.username)
+}
+
+func TestChangeAuthnFromAccountRecovery_ChangeU2F(t *testing.T) {
+	srv := newTestTLSServer(t)
+	ctx := context.Background()
+	mockEmitter := &events.MockEmitter{}
+	srv.Auth().emitter = mockEmitter
+
+	defaultModules := modules.GetModules()
+	defer modules.SetModules(defaultModules)
+	modules.SetModules(&testWithCloudModules{})
+
+	u, err := createUserWithRecoveryCodes(srv, "u2f")
+	require.NoError(t, err)
+
+	// Acquire an approved token requesting to recover a second factor.
+	approvedToken, err := srv.Auth().createRecoveryToken(ctx, u.username, UserTokenTypeRecoveryApproved, types.UserTokenUsage_RECOVER_2FA)
+	require.NoError(t, err)
+
+	// Create a new u2f key.
+	u2fRegResp, _, err := getMockedU2FAndRegisterRes(srv, approvedToken.GetName())
+	require.NoError(t, err)
+
+	// Add new u2f device with unique device name.
+	err = srv.Auth().ChangeAuthnFromAccountRecovery(ctx, &proto.ChangeAuthnFromAccountRecoveryRequest{
+		RecoveryApprovedTokenID: approvedToken.GetName(),
+		NewDeviceName:           "new-u2f",
+		NewAuthnCred: &proto.ChangeAuthnFromAccountRecoveryRequest_NewMFAResponse{NewMFAResponse: &proto.MFARegisterResponse{
+			Response: &proto.MFARegisterResponse_U2F{U2F: u2fRegResp},
+		}},
+	})
+	require.NoError(t, err)
+
+	// Test new device has been added.
+	mfas, err := srv.Auth().Identity.GetMFADevices(ctx, u.username, false)
+	require.NoError(t, err)
+
+	deviceNames := make([]string, 0, len(mfas))
+	for _, mfa := range mfas {
+		deviceNames = append(deviceNames, mfa.GetName())
+	}
+	require.ElementsMatch(t, []string{"u2f" /* default name */, "new-u2f"}, deviceNames)
+
+	// Test events emitted.
+	event := mockEmitter.LastEvent()
+	require.Equal(t, event.GetType(), events.MFADeviceAddEvent)
+	require.Equal(t, event.GetCode(), events.MFADeviceAddEventCode)
+}
+
 type userAuthCreds struct {
 	recoveryCodes []string
 	username      string

@@ -28,6 +28,7 @@ import (
 	"github.com/gravitational/teleport/lib/defaults"
 	"github.com/gravitational/teleport/lib/events"
 	"github.com/gravitational/teleport/lib/modules"
+	"github.com/gravitational/teleport/lib/services"
 	"github.com/gravitational/trace"
 
 	"github.com/sethvargo/go-diceware/diceware"
@@ -348,6 +349,76 @@ func (s *Server) recordFailedRecoveryAttempt(ctx context.Context, rootErr error,
 		username, defaults.MaxAccountRecoveryAttempts, apiutils.HumanTimeFormat(lockUntil))
 
 	return &lockUntil, nil
+}
+
+// ChangeAuthnFromAccountRecovery implements AuthService.ChangeAuthnFromAccountRecovery.
+func (s *Server) ChangeAuthnFromAccountRecovery(ctx context.Context, req *proto.ChangeAuthnFromAccountRecoveryRequest) error {
+	if err := s.isAccountRecoveryAllowed(ctx); err != nil {
+		return trace.Wrap(err)
+	}
+
+	approvedToken, err := s.GetUserToken(ctx, req.GetRecoveryApprovedTokenID())
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	if err := s.verifyUserToken(approvedToken, UserTokenTypeRecoveryApproved); err != nil {
+		// Provide obscure message on purpose, while logging the real error server side.
+		log.Debugf("Unable to change authn from account recovery with token(%s) type(%s)", approvedToken.GetName(), approvedToken.GetSubKind())
+		return trace.AccessDenied("access denied")
+	}
+
+	// Check that the correct auth credential is being recovered before setting a new one.
+	switch req.GetNewAuthnCred().(type) {
+	case *proto.ChangeAuthnFromAccountRecoveryRequest_NewPassword:
+		if approvedToken.GetUsage() == types.UserTokenUsage_RECOVER_2FA {
+			return trace.BadParameter("expected new second factor")
+		}
+
+		if err := services.VerifyPassword(req.GetNewPassword()); err != nil {
+			return trace.Wrap(err)
+		}
+
+		if err := s.UpsertPassword(approvedToken.GetUser(), req.GetNewPassword()); err != nil {
+			return trace.Wrap(err)
+		}
+
+	case *proto.ChangeAuthnFromAccountRecoveryRequest_NewMFAResponse:
+		if approvedToken.GetUsage() == types.UserTokenUsage_RECOVER_PWD {
+			return trace.BadParameter("expected new password")
+		}
+
+		err := s.validateMFARegResponseWithToken(ctx, req.GetNewMFAResponse(), approvedToken, req.GetNewDeviceName())
+		switch {
+		case trace.IsAlreadyExists(err):
+			// Return a shorter friendlier message.
+			return trace.AlreadyExists("MFA device with name %q already exists", req.GetNewDeviceName())
+		case err != nil:
+			return trace.Wrap(err)
+		}
+
+	default:
+		return trace.BadParameter("at least one new authentication is required")
+	}
+
+	// Check and remove user login lock so user can immediately sign in after finishing recovering.
+	user, err := s.GetUser(approvedToken.GetUser(), false)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	if user.GetStatus().IsLocked {
+		user.ResetLocks()
+		if err := s.Identity.UpsertUser(user); err != nil {
+			return trace.Wrap(err)
+		}
+
+		if err := s.DeleteUserLoginAttempts(approvedToken.GetUser()); err != nil {
+			return trace.Wrap(err)
+		}
+	}
+
+	return nil
 }
 
 func (s *Server) generateAndUpsertRecoveryCodes(ctx context.Context, username string) ([]string, error) {

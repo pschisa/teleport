@@ -3225,26 +3225,6 @@ func (g *GRPCServer) ApproveAccountRecovery(ctx context.Context, req *proto.Appr
 	return r, nil
 }
 
-// ApproveAccountRecovery is implemented by AuthService.ApproveAccountRecovery.
-func (g *GRPCServer) ApproveAccountRecovery(ctx context.Context, req *proto.ApproveAccountRecoveryRequest) (*types.UserTokenV3, error) {
-	auth, err := g.authenticate(ctx)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-
-	approvedToken, err := auth.ServerWithRoles.ApproveAccountRecovery(ctx, req)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-
-	r, ok := approvedToken.(*types.UserTokenV3)
-	if !ok {
-		return nil, trace.BadParameter("unexpected UserToken type %T", approvedToken)
-	}
-
-	return r, nil
-}
-
 // ChangeAuthnFromAccountRecovery is implemented by AuthService.ChangeAuthnFromAccountRecovery.
 func (g *GRPCServer) ChangeAuthnFromAccountRecovery(ctx context.Context, req *proto.ChangeAuthnFromAccountRecoveryRequest) (*empty.Empty, error) {
 	auth, err := g.authenticate(ctx)

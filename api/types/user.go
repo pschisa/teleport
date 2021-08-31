@@ -51,6 +51,8 @@ type User interface {
 	SetLocked(until time.Time, reason string)
 	// SetLockedFromRecoveryAttempt sets the time the lock for recovery attempt expires.
 	SetLockedFromRecoveryAttempt(until time.Time)
+	// ResetLocks resets lock related fields to empty values.
+	ResetLocks()
 	// SetRoles sets user roles
 	SetRoles(roles []string)
 	// AddRole adds role to the users' role list
@@ -264,6 +266,14 @@ func (u *UserV2) SetLocked(until time.Time, reason string) {
 // SetLockedFromRecoveryAttempt sets the time the lock for recovery attempt expires.
 func (u *UserV2) SetLockedFromRecoveryAttempt(until time.Time) {
 	u.Spec.Status.RecoveryAttemptLockExpires = until
+}
+
+// ResetLocks resets lock related fields to empty values.
+func (u *UserV2) ResetLocks() {
+	u.Spec.Status.IsLocked = false
+	u.Spec.Status.LockedMessage = ""
+	u.Spec.Status.LockExpires = time.Time{}
+	u.Spec.Status.RecoveryAttemptLockExpires = time.Time{}
 }
 
 // IsEmpty returns true if there's no info about who created this user
