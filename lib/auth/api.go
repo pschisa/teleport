@@ -51,7 +51,12 @@ type Announcer interface {
 	NewKeepAliver(ctx context.Context) (types.KeepAliver, error)
 
 	// UpsertAppServer adds an application server.
+	//
+	// DELETE IN 9.0. Deprecated, use UpsertApplicationServer.
 	UpsertAppServer(context.Context, types.Server) (*types.KeepAlive, error)
+
+	// UpsertApplicationServer registers an application server.
+	UpsertApplicationServer(context.Context, types.AppServer) (*types.KeepAlive, error)
 
 	// UpsertDatabaseServer registers a database proxy server.
 	UpsertDatabaseServer(context.Context, types.DatabaseServer) (*types.KeepAlive, error)
@@ -351,8 +356,15 @@ func (w *Wrapper) UpsertKubeService(ctx context.Context, s types.Server) error {
 }
 
 // UpsertAppServer adds an application server.
+//
+// DELETE IN 9.0. Deprecated, use UpsertAppServer.
 func (w *Wrapper) UpsertAppServer(ctx context.Context, server types.Server) (*types.KeepAlive, error) {
 	return w.NoCache.UpsertAppServer(ctx, server)
+}
+
+// UpsertApplicationServer registers an application server.
+func (w *Wrapper) UpsertApplicationServer(ctx context.Context, server types.AppServer) (*types.KeepAlive, error) {
+	return w.NoCache.UpsertApplicationServer(ctx, server)
 }
 
 // UpsertDatabaseServer registers a database proxy server.

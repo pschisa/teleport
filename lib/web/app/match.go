@@ -56,7 +56,6 @@ func Match(ctx context.Context, authClient Getter, fn Matcher) (types.AppServer,
 	}
 
 	var as []types.AppServer
-
 	for _, server := range servers {
 		if fn(server.GetApp()) {
 			as = append(as, server)
@@ -66,6 +65,7 @@ func Match(ctx context.Context, authClient Getter, fn Matcher) (types.AppServer,
 	if len(as) == 0 {
 		return nil, trace.NotFound("failed to match application")
 	}
+
 	index := rand.Intn(len(as))
 	return as[index], nil
 }
