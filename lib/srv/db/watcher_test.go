@@ -137,6 +137,22 @@ func TestWatcher(t *testing.T) {
 		t.Fatal("Didn't receive reconcile event after 1s.")
 	}
 
+	// Update db2 URI so it gets re-registered.
+	db2.SetURI("localhost:2345")
+	err = testCtx.authServer.UpdateDatabase(ctx, db2)
+	require.NoError(t, err)
+
+	// db2 should get updated.
+	select {
+	case d := <-reconcileCh:
+		sort.Sort(d)
+		require.Empty(t, cmp.Diff(types.Databases{db0, db1, db2}, d,
+			cmpopts.IgnoreFields(types.Metadata{}, "ID"),
+		))
+	case <-time.After(time.Second):
+		t.Fatal("Didn't receive reconcile event after 1s.")
+	}
+
 	// Update db1 labels so it doesn't match.
 	db1.SetStaticLabels(map[string]string{"group": "c", types.OriginLabel: types.OriginDynamic})
 	err = testCtx.authServer.UpdateDatabase(ctx, db1)

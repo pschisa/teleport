@@ -68,6 +68,7 @@ func (s *Server) startWatcher(ctx context.Context) (*services.DatabaseWatcher, e
 // proxying with the provided up-to-date list of cluster databases.
 func (s *Server) reconcileResources(ctx context.Context, newResources types.Databases) error {
 	s.log.Debugf("Reconciling with %v database resources.", len(newResources))
+	var errs []error
 	// First remove databases that aren't present in the resource list anymore.
 	for _, current := range s.getDatabases() {
 		// Skip databases from static configuration. For backwards compatibility
@@ -78,7 +79,7 @@ func (s *Server) reconcileResources(ctx context.Context, newResources types.Data
 		if new := newResources.Find(current.GetName()); new == nil {
 			s.log.Infof("%v removed, unregistering.", current)
 			if err := s.unregisterDatabase(ctx, current.GetName()); err != nil {
-				return trace.Wrap(err)
+				errs = append(errs, trace.Wrap(err, "failed to unregister %v", current))
 			}
 		}
 	}
@@ -89,7 +90,7 @@ func (s *Server) reconcileResources(ctx context.Context, newResources types.Data
 			if services.MatchDatabase(s.cfg.Selectors, new) {
 				s.log.Infof("%v matches, registering.", new)
 				if err := s.registerDatabase(ctx, new); err != nil {
-					return trace.Wrap(err)
+					errs = append(errs, trace.Wrap(err, "failed to register %v", new))
 				}
 			} else {
 				s.log.Debugf("%v doesn't match, not registering.", new)
@@ -102,18 +103,18 @@ func (s *Server) reconcileResources(ctx context.Context, newResources types.Data
 			// If labels were updated, the database may no longer match.
 			if services.MatchDatabase(s.cfg.Selectors, new) {
 				s.log.Infof("%v updated, re-registering.", new)
-				if err := s.registerDatabase(ctx, new); err != nil {
-					return trace.Wrap(err)
+				if err := s.reRegisterDatabase(ctx, new); err != nil {
+					errs = append(errs, trace.Wrap(err, "failed to re-register %v", new))
 				}
 			} else {
 				s.log.Infof("%v updated and no longer matches, unregistering.", new)
 				if err := s.unregisterDatabase(ctx, new.GetName()); err != nil {
-					return trace.Wrap(err)
+					errs = append(errs, trace.Wrap(err, "failed to unregister %v", new))
 				}
 			}
 		} else {
 			s.log.Debugf("%v is already registered.", new)
 		}
 	}
-	return nil
+	return trace.NewAggregate(errs...)
 }

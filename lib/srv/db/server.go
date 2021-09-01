@@ -226,19 +226,17 @@ func (s *Server) stopDatabase(ctx context.Context, name string) error {
 	if err := s.stopHeartbeat(name); err != nil {
 		return trace.Wrap(err)
 	}
-	// Heartbeat is stopped but if we don't remove this database server,
-	// it can linger for up to ~10m until its TTL expires.
-	if err := s.removeDatabaseServer(ctx, name); err != nil && !trace.IsNotFound(err) {
-		return trace.Wrap(err)
-	}
 	s.log.Debugf("Stopped database %q.", name)
 	return nil
 }
 
-// removeDatabaseServer deletes database server for the specified database.
-func (s *Server) removeDatabaseServer(ctx context.Context, name string) error {
-	return s.cfg.AuthClient.DeleteDatabaseServer(ctx, apidefaults.Namespace,
-		s.cfg.HostID, name)
+// deleteDatabaseServer deletes database server for the specified database.
+func (s *Server) deleteDatabaseServer(ctx context.Context, name string) error {
+	err := s.cfg.AuthClient.DeleteDatabaseServer(ctx, apidefaults.Namespace, s.cfg.HostID, name)
+	if err != nil && !trace.IsNotFound(err) {
+		return trace.Wrap(err)
+	}
+	return nil
 }
 
 // startDynamicLabels starts dynamic labels for the database if it has them.
@@ -300,10 +298,31 @@ func (s *Server) registerDatabase(ctx context.Context, database types.Database) 
 	return nil
 }
 
+// reRegisterDatabase updates database that is already registered.
+func (s *Server) reRegisterDatabase(ctx context.Context, database types.Database) error {
+	// Stop heartbeat and dynamic labels before starting new ones.
+	if err := s.stopDatabase(ctx, database.GetName()); err != nil {
+		return trace.Wrap(err)
+	}
+	if err := s.registerDatabase(ctx, database); err != nil {
+		// If we failed to re-register, don't keep proxying the old database.
+		if errUnregister := s.unregisterDatabase(ctx, database.GetName()); errUnregister != nil {
+			return trace.NewAggregate(err, errUnregister)
+		}
+		return trace.Wrap(err)
+	}
+	return nil
+}
+
 // unregisterDatabase uninitializes the specified database and removes it from
-// the list of dastabases this server proxies.
+// the list of databases this server proxies.
 func (s *Server) unregisterDatabase(ctx context.Context, name string) error {
 	if err := s.stopDatabase(ctx, name); err != nil {
+		return trace.Wrap(err)
+	}
+	// Heartbeat is stopped but if we don't remove this database server,
+	// it can linger for up to ~10m until its TTL expires.
+	if err := s.deleteDatabaseServer(ctx, name); err != nil {
 		return trace.Wrap(err)
 	}
 	s.mu.Lock()

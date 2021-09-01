@@ -52,6 +52,8 @@ type Database interface {
 	GetProtocol() string
 	// GetURI returns the database connection endpoint.
 	GetURI() string
+	// SetURI sets the database connection endpoint.
+	SetURI(string)
 	// GetCA returns the database CA certificate.
 	GetCA() string
 	// SetCA sets the database CA certificate.
@@ -200,6 +202,11 @@ func (d *DatabaseV3) GetProtocol() string {
 // GetURI returns the database connection address.
 func (d *DatabaseV3) GetURI() string {
 	return d.Spec.URI
+}
+
+// SetURI sets the database connection address.
+func (d *DatabaseV3) SetURI(uri string) {
+	d.Spec.URI = uri
 }
 
 // GetCA returns the database CA certificate.
